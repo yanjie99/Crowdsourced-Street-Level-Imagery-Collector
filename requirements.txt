@@ -1,0 +1,23 @@
+# Libraries the collect tool needs (Python 3.11 or newer).
+# Install with:  python -m pip install -r requirements.txt
+# For the exact versions it was tested with (recommended for long-term use):
+#                python -m pip install -r requirements.txt -c constraints.txt
+# The minimum versions match pyproject.toml; the versions in brackets are the ones it was tested with (Nov 2026,
+# Python 3.12.10, Windows 11).
+
+pyyaml>=6                      # project settings            (tested 6.0.3)
+typer>=0.12                    # command line                (0.27.2)
+pandas>=2.2                    # tables                      (3.0.5)
+pyarrow>=15                    # Parquet files               (25.0.1)
+numpy>=1.26                    # arrays                      (2.5.2)
+shapely>=2.0                   # geometry                    (2.1.2)
+pyproj>=3.6                    # map projections             (3.8.0)
+osmium>=3.7                    # OpenStreetMap extracts      (4.3.2)
+requests>=2.31                 # HTTP (ohsome, token test)   (2.34.2)
+opencv-python-headless>=4.8    # panoramas and views         (5.0.0.93)
+mapbox-vector-tile>=2.0        # Mapillary coverage tiles    (2.2.0)
+pillow>=10                     # image checks, working copies (12.3.0)
+tzdata                         # time zones                  (2026.3)
+
+# Only for running the unit tests (python -m pytest):
+# pytest>=7                    #                             (9.1.1)

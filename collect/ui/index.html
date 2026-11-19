@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crowdsourced Street-level Imagery Downloader</title>
+<!-- Leaflet 1.9.4 (BSD-2-Clause) ships with the tool: no CDN needed -->
+<link rel="stylesheet" href="/static/leaflet/leaflet.css">
+<script src="/static/leaflet/leaflet.js"></script>
+<style>
+:root{--bg:#f6f7f9;--panel:#fff;--ink:#1b1f24;--muted:#5d6672;--line:#dde1e6;--accent:#2457c5;--accent-ink:#fff;
+--ok:#1f7a3a;--warn:#9a5b00;--bad:#b3261e;--chip:#eef1f5;--mly:#2e8b57;--kv:#c2410c;--code:#f1f3f5}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#121417;--panel:#1b1e22;--ink:#e7e9ec;--muted:#9aa3ad;
+--line:#2d3238;--accent:#7aa2ff;--accent-ink:#0d1117;--ok:#5fcf80;--warn:#e0a84a;--bad:#ff7b72;--chip:#23272d;--code:#15181c}}
+:root[data-theme="dark"]{--bg:#121417;--panel:#1b1e22;--ink:#e7e9ec;--muted:#9aa3ad;--line:#2d3238;--accent:#7aa2ff;
+--accent-ink:#0d1117;--ok:#5fcf80;--warn:#e0a84a;--bad:#ff7b72;--chip:#23272d;--code:#15181c}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{display:flex;align-items:center;gap:16px;padding:10px 20px;border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:1100}
+header h1{font-size:15px;line-height:1.25;margin:0;font-weight:600;max-width:240px}
+header select{min-width:220px}
+nav{display:flex;gap:4px;flex-wrap:wrap}
+nav button{background:none;border:0;color:var(--muted);padding:6px 10px;border-radius:6px;cursor:pointer;font:inherit}
+nav button.on{background:var(--chip);color:var(--ink);font-weight:600}
+main{max-width:1180px;margin:0 auto;padding:20px 16px 24px}
+footer{max-width:1180px;margin:0 auto;padding:14px 16px 28px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);text-align:center}
+.intro p,.intro li{line-height:1.6}.intro ul,.intro ol{padding-left:20px;margin:6px 0}.intro h2{margin-top:2px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin-bottom:16px}
+.card h2{font-size:15px;margin:0 0 10px}
+.card h3{font-size:13px;margin:16px 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+label{display:block;font-size:12px;color:var(--muted);margin:8px 0 3px}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px;width:100%}
+input[type=checkbox]{width:auto}
+textarea{font-family:ui-monospace,Consolas,monospace;font-size:12.5px;min-height:420px}
+button.b{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:6px 12px;border-radius:6px;cursor:pointer}
+button.p{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button.b:disabled{opacity:.5;cursor:default}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;color:var(--muted);font-weight:600}
+.chip{display:inline-block;padding:1px 8px;border-radius:999px;background:var(--chip);font-size:12px}
+.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}.muted{color:var(--muted)}
+.map{height:420px;border-radius:8px;border:1px solid var(--line)}
+pre.log{background:var(--code);border:1px solid var(--line);border-radius:6px;padding:10px;max-height:420px;overflow:auto;font-size:12px;white-space:pre-wrap;word-break:break-word}
+.thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.thumb{border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--bg)}
+.thumb img{width:100%;border-radius:4px;display:block}
+.note{font-size:12.5px;color:var(--muted);overflow-wrap:anywhere}
+label.row{flex-wrap:nowrap;align-items:flex-start;color:var(--ink);font-size:13px}
+label.row input{margin-top:3px}
+.bar{height:10px;border-radius:999px;background:var(--chip);overflow:hidden;position:relative}
+.bar>i{position:absolute;left:0;top:0;bottom:0;background:var(--accent);border-radius:999px;transition:width .6s}
+.bar.ind>i{width:30%;animation:slide 1.4s ease-in-out infinite}
+@keyframes slide{0%{left:-30%}100%{left:100%}}
+.bar.ok>i{background:var(--ok)}.bar.bad>i{background:var(--bad)}
+.box-bad{border-left:4px solid var(--bad)}.box-warn{border-left:4px solid var(--warn)}.box-ok{border-left:4px solid var(--ok)}
+details summary{cursor:pointer;color:var(--muted);font-size:12.5px}
+.msg{position:fixed;right:16px;bottom:16px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px;box-shadow:0 4px 16px #0003;max-width:420px;z-index:2000}
+.report h1{font-size:18px}.report h2{font-size:15px;margin-top:18px}
+.legend span{display:inline-flex;align-items:center;gap:4px;margin-right:12px;font-size:12px}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+@media (max-width:640px){header{flex-wrap:wrap}header select{min-width:0;width:100%}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Crowdsourced Street-level Imagery Downloader</h1>
+  <select id="proj" title="Project"></select>
+  <nav id="nav"></nav>
+</header>
+<main id="main"></main>
+<footer>© 2026 Crowdsourced Street-Level Imagery (CSI) Capture and Processing, Department of Geography, National University of Singapore.</footer>
+<div id="msg" class="msg" hidden></div>
+<script>
+const TABS=[["intro","Introduction"],["projects","Projects"],["overview","Overview"],["settings","Settings"],["run","Run"],["review","Review"],["report","Report"]];
+const S={pid:localStorageGet("pid"),tab:localStorageGet("tab")||"intro",timer:null};
+const MLY_SIZES=["thumb_256","thumb_1024","thumb_2048","original"],KV_SIZES=["th","lth","proc","original"];
+function localStorageGet(k){try{return localStorage.getItem("collect."+k)}catch(e){return null}}
+function localStorageSet(k,v){try{localStorage.setItem("collect."+k,v)}catch(e){}}
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+async function api(path,opt={}){
+  const r=await fetch("/api/"+path,{...opt,headers:{"Content-Type":"application/json","X-Collect":"1",...(opt.headers||{})},
+    body:opt.body?JSON.stringify(opt.body):undefined});
+  const j=await r.json().catch(()=>({error:"bad response"}));
+  if(!r.ok)throw new Error(j.error||r.statusText);return j}
+function toast(t,cls=""){const m=$("#msg");m.innerHTML=`<span class="${cls}">${esc(t)}</span>`;m.hidden=false;clearTimeout(m._t);m._t=setTimeout(()=>m.hidden=true,6000)}
+function nav(){ $("#nav").innerHTML=TABS.map(([k,l])=>`<button class="${S.tab===k?"on":""}" data-t="${k}" ${k!=="projects"&&k!=="intro"&&!S.pid?"disabled":""}>${l}</button>`).join("");
+  document.querySelectorAll("#nav button").forEach(b=>b.onclick=()=>{S.tab=b.dataset.t;localStorageSet("tab",S.tab);render()})}
+async function loadProjects(){const j=await api("projects");S.projects=j.projects;S.workspace=j.workspace;
+  if(S.pid&&!j.projects.find(p=>p.id===S.pid))S.pid=null;
+  $("#proj").innerHTML=`<option value="">Choose a project…</option>`+j.projects.map(p=>`<option value="${esc(p.id)}" ${p.id===S.pid?"selected":""}>${esc(p.name)}</option>`).join("");
+  $("#proj").onchange=e=>{S.pid=e.target.value||null;localStorageSet("pid",S.pid||"");if(S.pid&&S.tab==="projects")S.tab="overview";render()}}
+async function render(){clearInterval(S.timer);nav();const m=$("#main");m.innerHTML=`<p class="muted">Loading…</p>`;
+  try{await ({intro:vIntro,projects:vProjects,overview:vOverview,settings:vSettings,run:vRun,review:vReview,report:vReport}[S.tab]||vProjects)(m)}
+  catch(e){m.innerHTML=`<div class="card bad">${esc(e.message)}</div>`}}
+
+/* ---------- introduction */
+async function vIntro(m){
+  m.innerHTML=`<div class="intro">
+  <div class="card"><h2>Crowdsourced Street-level Imagery Downloader</h2>
+   <p>This tool collects crowdsourced street-level imagery from <b>Mapillary</b> and <b>KartaView</b> for a study area
+   you choose anywhere in the world, together with the <b>OpenStreetMap</b> context needed to analyze it: road
+   segments, carriageway widths from the national road standard, and the map as it was on each capture's date.
+   Everything runs on your computer; the browser pages and the <code>collect</code> command line are two ways to drive
+   the same steps.</p></div>
+  <div class="grid">
+  <div class="card"><h2>What it can do</h2><ul>
+   <li><b>Any area:</b> pick a place by name, draw a rectangle or polygon, or load a GeoJSON outline.</li>
+   <li><b>Metadata harvest:</b> every capture's position, time, camera and sequence, from both platforms, matched to OSM road segments.</li>
+   <li><b>Choose what to download:</b> the whole area, a drawn part of it, or a stratified sample; a date range; image sizes from thumbnails to originals.</li>
+   <li><b>Images and panoramas:</b> polite, resumable downloads; working copies; 360° panoramas screened and cut into perspective views.</li>
+   <li><b>Map context:</b> drivable ways, lane and line widths, and OSM history (ohsome) to match each capture to the map of its date.</li>
+   <li><b>Checks and report:</b> completeness checks, storage use, a fetch log, and a run report with the data credits.</li>
+   <li><b>Built to last:</b> the two platforms run in parallel at their own polite rates, failures are explained with a fix, and every raw response is kept so a project can be rerun offline.</li>
+  </ul></div>
+  <div class="card"><h2>How to use it</h2><ol>
+   <li><b>Projects:</b> choose the study area on the map, name the project, pick the platforms and where to save it, then <i>Create project</i>.</li>
+   <li><b>Settings:</b> store your Mapillary token, set the national lane and line widths (road standard), choose what to download (selection, dates, image sizes) and press <i>Save changes</i>. <i>Check services</i> confirms every web service answers.</li>
+   <li><b>Run:</b> read <i>Before you run</i>, then <i>Run all</i>. Progress bars show each step and each platform; a failure is explained with what to try, and a rerun resumes where it stopped.</li>
+   <li><b>Review:</b> look at sample frames, panoramas marked as mis-stitched, and capture classes.</li>
+   <li><b>Report:</b> the run report: counts, storage, checks and credits.</li>
+  </ol><p class="note">The user guide (<code>docs/USER_GUIDE.md</code>) describes every step and setting.</p></div></div>
+  <div class="card"><h2>Terms of use</h2>
+   <p><b>Intellectual property.</b> This tool, its code, documentation and design are © 2026 Crowdsourced Street-Level
+   Imagery (CSI) Capture and Processing, Department of Geography, National University of Singapore, and licensed under the
+   PolyForm Noncommercial License 1.0.0 (the <code>LICENSE</code> file). You may use, copy, modify and share it for
+   non-commercial purposes under that license; any other use requires the authors' permission.</p>
+   <p><b>Academic research only.</b> The tool may be used only for non-commercial academic research. Any other use,
+   including commercial use or providing it as a service to others, is not permitted.</p>
+   <p><b>No misuse of data.</b> Users must not use the tool or the data it collects to identify, track or profile
+   individuals; to de-blur, enhance or otherwise recover faces, licence plates or other personal information; for
+   surveillance; or in any way that breaks the law (including personal data protection law) or the terms of the
+   platforms. Collect only what the research needs, store it securely, and obtain the ethics approval your
+   institution requires.</p>
+   <p><b>Platform terms and credits.</b> Imagery remains subject to the providers' terms and licenses and must be
+   credited in anything you publish: images © Mapillary, CC BY-SA 4.0; images © Grab and KartaView Contributors,
+   CC BY-SA 4.0; map data © OpenStreetMap contributors, ODbL (extracts by Geofabrik, history via ohsome by HeiGIT,
+   place search by Nominatim). Heavy KartaView use needs the platform's approval. The map library is Leaflet
+   (BSD-2-Clause). The tool keeps request rates polite; do not raise them beyond what the platforms allow.</p>
+   <p class="note">The data are provided by third parties as they are; the authors give no warranty for their
+   accuracy or availability and accept no liability for how the tool or the data are used.</p></div>
+  <div class="row"><button class="b p" id="intro-go">Go to Projects</button></div></div>`;
+  $("#intro-go").onclick=()=>{S.tab="projects";localStorageSet("tab","projects");render()}}
+
+/* ---------- projects */
+async function vProjects(m){await loadProjects();
+  m.innerHTML=`<div class="card"><h2>Projects</h2><p class="note">Workspace: ${esc(S.workspace)}</p>
+  <table><tr><th>Project</th><th>Country</th><th>Mode</th><th>Steps done</th><th>Job</th></tr>
+  ${S.projects.map(p=>`<tr><td><a href="#" data-p="${esc(p.id)}">${esc(p.name)}</a><div class="note" title="${esc(p.folder||"")}">${esc(p.folder||p.id)}</div></td><td>${esc(p.country||"")}</td>
+  <td>${esc(p.mode||"")}</td><td>${p.error?`<span class="bad">${esc(p.error)}</span>`:`${p.done} of ${p.steps}`}</td><td>${esc(p.job||"")}</td></tr>`).join("")||`<tr><td colspan=5 class="muted">No projects yet.</td></tr>`}</table></div>
+  <div class="card"><h2>New project</h2>
+   <p class="note">Choose the study area on the map: search for a place and pick a result, or draw a rectangle or polygon, or use the current map view, or load a GeoJSON file.</p>
+   <div class="row"><input id="np-q" placeholder="Search a place, e.g. Bishan, Singapore" style="flex:1;min-width:200px"><button class="b" id="np-search">Search</button></div>
+   <div id="np-res" class="note" style="margin-top:6px"></div>
+   <div class="row" style="margin-top:8px">
+    <button class="b" id="np-rect">Draw rectangle</button><button class="b" id="np-poly">Draw polygon</button>
+    <button class="b" id="np-view">Use map view</button><button class="b" id="np-clear">Clear</button>
+    <label class="b" style="cursor:pointer;margin:0">Load GeoJSON<input id="np-file" type="file" accept=".geojson,.json" hidden></label>
+    <span class="note" id="np-hint"></span></div>
+   <div id="np-map" class="map" style="margin-top:8px;height:460px"></div>
+   <div id="np-sel" style="margin-top:8px" class="note">No area chosen yet.</div>
+   <div class="grid" style="margin-top:8px">
+   <div><label>Folder name (letters, digits, - and _)</label><input id="np-id" placeholder="bishan_2025">
+   <label>Project name</label><input id="np-name" placeholder="Bishan test">
+   <label>Save in (the project folder is created inside this folder)</label>
+   <div class="row" style="flex-wrap:nowrap"><input id="np-loc" value="${esc(S.workspace)}" spellcheck="false"><button class="b" id="np-browse">Browse…</button></div>
+   <div id="np-fb" hidden style="margin-top:6px;border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--bg)"></div>
+   <div class="note">Default: the workspace. Press Browse… to pick another folder, e.g. on a larger disk; the project still appears in this list.</div></div>
+   <div><label>Platforms</label><div class="row"><label class="row"><input type="checkbox" id="np-mly" checked> Mapillary</label>
+   <label class="row"><input type="checkbox" id="np-kv" checked> KartaView</label></div>
+   <label>Storage budget for images (GB)</label><input id="np-budget" type="number" min="1" value="50"></div></div>
+   <p class="note">The app derives the bounding boxes, a metric map projection, the time zone, driving side and country code from the area. You then set the road standard and check the rest under Settings.</p>
+   <button class="b p" id="np-go" disabled>Create project</button></div>`;
+  m.querySelectorAll("a[data-p]").forEach(a=>a.onclick=e=>{e.preventDefault();S.pid=a.dataset.p;localStorageSet("pid",S.pid);S.tab="overview";loadProjects().then(render)});
+  areaPicker();}
+
+/* area picker: search results, rectangle, polygon, map view, GeoJSON file */
+function km2(geom){const rings=geom.type==="Polygon"?[geom.coordinates]:geom.coordinates;let a=0;
+  for(const poly of rings){poly.forEach((ring,k)=>{const lat0=ring.reduce((s,p)=>s+p[1],0)/ring.length*Math.PI/180;
+    const R=6371.0088,xy=ring.map(([lo,la])=>[lo*Math.PI/180*R*Math.cos(lat0),la*Math.PI/180*R]);let s=0;
+    for(let i=0;i<xy.length-1;i++)s+=xy[i][0]*xy[i+1][1]-xy[i+1][0]*xy[i][1];a+=(k?-1:1)*Math.abs(s)/2})}return a}
+function areaPicker(){
+  const map=baseMap($("#np-map"));map.setView([20,0],2);map.doubleClickZoom.disable();
+  const P={sel:null,layer:null,mode:null,pts:[],tmp:null,country:"",name:""};
+  const setSel=(geom,label,country="",name="")=>{P.sel=geom;P.country=country;P.name=name;if(P.layer)map.removeLayer(P.layer);
+    P.layer=L.geoJSON(geom,{style:{color:"#2457c5",weight:2,fillOpacity:.12}}).addTo(map);map.fitBounds(P.layer.getBounds(),{maxZoom:15});
+    const a=km2(geom);$("#np-sel").innerHTML=`<b>Area:</b> ${esc(label)} · ${a<10?a.toFixed(2):Math.round(a).toLocaleString()} km²`+
+      (a>200?` <span class="warn">· large: Step 1 reads every capture in it and can take hours</span>`:"");
+    $("#np-go").disabled=false;if(name&&!$("#np-name").value)$("#np-name").value=name.split(",")[0];
+    if(name&&!$("#np-id").value)$("#np-id").value=name.split(",")[0].trim().toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"")};
+  const stopDraw=()=>{P.mode=null;P.pts=[];if(P.tmp){map.removeLayer(P.tmp);P.tmp=null}map.dragging.enable();$("#np-hint").textContent="";
+    $("#np-map").style.cursor=""};
+  $("#np-clear").onclick=()=>{stopDraw();if(P.layer)map.removeLayer(P.layer);P.layer=P.sel=null;$("#np-sel").textContent="No area chosen yet.";$("#np-go").disabled=true};
+  $("#np-view").onclick=()=>{stopDraw();const b=map.getBounds();if(map.getZoom()<8)return toast("Zoom in further first: the view is too large for a study area","bad");
+    setSel(rectGeom(b.getWest(),b.getSouth(),b.getEast(),b.getNorth()),"current map view")};
+  $("#np-rect").onclick=()=>{stopDraw();P.mode="rect";map.dragging.disable();$("#np-map").style.cursor="crosshair";$("#np-hint").textContent="Press and drag on the map."};
+  $("#np-poly").onclick=()=>{stopDraw();P.mode="poly";$("#np-map").style.cursor="crosshair";$("#np-hint").textContent="Click the corners; double-click (or click the first corner) to finish."};
+  let start=null;
+  map.on("mousedown",e=>{if(P.mode!=="rect")return;start=e.latlng});
+  map.on("mousemove",e=>{if(P.mode==="rect"&&start){const b=L.latLngBounds(start,e.latlng);if(P.tmp)P.tmp.setBounds(b);else P.tmp=L.rectangle(b,{color:"#2457c5",weight:1,dashArray:"4"}).addTo(map)}
+    if(P.mode==="poly"&&P.pts.length){const ll=[...P.pts,e.latlng];if(P.tmp)P.tmp.setLatLngs(ll);else P.tmp=L.polyline(ll,{color:"#2457c5",weight:1,dashArray:"4"}).addTo(map)}});
+  map.on("mouseup",e=>{if(P.mode!=="rect"||!start)return;const b=L.latLngBounds(start,e.latlng);start=null;stopDraw();
+    if(b.getNorth()-b.getSouth()<1e-4)return;setSel(rectGeom(b.getWest(),b.getSouth(),b.getEast(),b.getNorth()),"drawn rectangle")});
+  const finishPoly=()=>{const pts=P.pts.slice();stopDraw();if(pts.length<3)return toast("A polygon needs at least 3 corners","bad");
+    const ring=pts.map(p=>[+p.lng.toFixed(6),+p.lat.toFixed(6)]);ring.push(ring[0]);setSel({type:"Polygon",coordinates:[ring]},"drawn polygon")};
+  map.on("click",e=>{if(P.mode!=="poly")return;if(P.pts.length>2){const f=map.latLngToContainerPoint(P.pts[0]),c=map.latLngToContainerPoint(e.latlng);
+      if(f.distanceTo(c)<10)return finishPoly()}P.pts.push(e.latlng)});
+  map.on("dblclick",()=>{if(P.mode==="poly")finishPoly()});
+  $("#np-file").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const g=JSON.parse(await f.text());
+    const geoms=(g.type==="FeatureCollection"?g.features.map(x=>x.geometry):[g.geometry||g]).filter(x=>x&&/Polygon/.test(x.type));
+    if(!geoms.length)throw new Error("no polygon in the file");
+    const geom=geoms.length===1?geoms[0]:{type:"MultiPolygon",coordinates:geoms.flatMap(x=>x.type==="Polygon"?[x.coordinates]:x.coordinates)};
+    stopDraw();setSel(geom,f.name)}catch(err){toast("Could not read the file: "+err.message,"bad")}};
+  const search=async()=>{const q=$("#np-q").value.trim();if(!q)return;$("#np-res").textContent="Searching OpenStreetMap…";
+    try{const r=await api("geocode?q="+encodeURIComponent(q));if(!r.results.length){$("#np-res").innerHTML=`<span class="warn">No place found. Try another spelling, add the city or country, or draw the area on the map.</span>`;return}
+      $("#np-res").innerHTML=`<table>${r.results.map((x,i)=>`<tr><td>${esc(x.name)}<div class="note">${esc(x.kind)}${x.has_outline?"":" · no outline in OSM"}</div></td>
+        <td style="white-space:nowrap">${x.has_outline?`<button class="b" data-o="${i}">Use outline</button> `:""}${x.bbox?`<button class="b" data-b="${i}">Use its box</button>`:""}
+        <button class="b" data-z="${i}">Show</button></td></tr>`).join("")}</table>`;
+      const R=r.results;
+      $("#np-res").querySelectorAll("[data-o]").forEach(b=>b.onclick=()=>{const x=R[+b.dataset.o];setSel(x.geometry,x.name,x.country_code,x.name)});
+      $("#np-res").querySelectorAll("[data-b]").forEach(b=>b.onclick=()=>{const x=R[+b.dataset.b];setSel(rectGeom(...x.bbox),x.name+" (box)",x.country_code,x.name)});
+      $("#np-res").querySelectorAll("[data-z]").forEach(b=>b.onclick=()=>{const x=R[+b.dataset.z];if(x.bbox)map.fitBounds([[x.bbox[1],x.bbox[0]],[x.bbox[3],x.bbox[2]]],{maxZoom:15});else map.setView([x.lat,x.lon],14)})}
+    catch(e){$("#np-res").innerHTML=`<span class="bad">${esc(e.message)}</span>`}};
+  $("#np-search").onclick=search;$("#np-q").onkeydown=e=>{if(e.key==="Enter")search()};
+  folderBrowser($("#np-browse"),$("#np-fb"),$("#np-loc"));
+  $("#np-go").onclick=async()=>{if(!P.sel)return toast("Choose an area first","bad");
+    const b={id:$("#np-id").value.trim(),name:$("#np-name").value.trim(),boundary_geojson:{type:"FeatureCollection",features:[{type:"Feature",properties:{name:P.name||""},geometry:P.sel}]},
+      country_code:P.country||null,platforms:[$("#np-mly").checked&&"mapillary",$("#np-kv").checked&&"kartaview"].filter(Boolean),budget_gb:+$("#np-budget").value||null,location:$("#np-loc").value.trim()};
+    if(!b.id)return toast("Give a folder name","bad");
+    $("#np-go").disabled=true;try{const r=await api("projects",{method:"POST",body:b});S.pid=r.id;localStorageSet("pid",r.id);S.tab="overview";
+      toast(`Created: ${r.area.country_code}, ${r.area.timezone}, ${r.area.metric_crs}`,"ok");await loadProjects();render()}
+    catch(e){toast(e.message,"bad");$("#np-go").disabled=false}}}
+/* Folder browser for "Save in": the page cannot read real folder paths itself, so the local server lists them */
+function folderBrowser(btn,box,input){
+  const show=async path=>{let r;try{r=await api("folders?path="+encodeURIComponent(path||""))}catch(e){return toast(e.message,"bad")}
+    const here=r.path;
+    box.innerHTML=`<div class="row" style="justify-content:space-between"><b style="overflow-wrap:anywhere">${here?esc(here):"This computer"}</b>
+       <span class="row">${here?`<button class="b" data-go="${esc(r.parent||"")}">↑ Up</button>`:""}
+       <select id="fb-drive" style="width:auto">${r.drives.map(d=>`<option ${here&&here.toUpperCase().startsWith(d.toUpperCase())?"selected":""}>${esc(d)}</option>`).join("")}</select></span></div>
+     <div style="max-height:220px;overflow:auto;margin:6px 0;border:1px solid var(--line);border-radius:6px;background:var(--panel)">
+       ${(here?r.folders:r.drives).map(f=>`<div class="fb-item" data-go="${esc(here?here.replace(/[\\\/]$/,"")+"\\"+f:f)}"
+          style="padding:4px 8px;cursor:pointer;border-bottom:1px solid var(--line)">📁 ${esc(f)}</div>`).join("")||`<div class="note" style="padding:6px 8px">No sub-folders.</div>`}</div>
+     <div class="row">${here?`<button class="b p" id="fb-use" ${r.writable===false?"disabled title='no permission to write here'":""}>Use this folder</button>
+       <input id="fb-new" placeholder="new folder name" style="width:170px"><button class="b" id="fb-mk">Create folder here</button>`:
+       `<span class="note">Choose a drive.</span>`}<button class="b" id="fb-x">Cancel</button></div>`;
+    box.querySelectorAll("[data-go]").forEach(e=>e.onclick=()=>show(e.dataset.go));
+    box.querySelectorAll(".fb-item").forEach(e=>{e.onmouseenter=()=>e.style.background="var(--chip)";e.onmouseleave=()=>e.style.background=""});
+    $("#fb-drive").onchange=e=>show(e.target.value);
+    $("#fb-x").onclick=()=>{box.hidden=true};
+    if(here){$("#fb-use").onclick=()=>{input.value=here;box.hidden=true;toast("Save in: "+here,"ok")};
+      $("#fb-mk").onclick=async()=>{const n=$("#fb-new").value.trim();if(!n)return toast("Type a folder name first","bad");
+        try{const r2=await api("folders",{method:"POST",body:{path:here,name:n}});toast("Created "+r2.path,"ok");show(r2.path)}catch(e){toast(e.message,"bad")}}}};
+  btn.onclick=()=>{if(!box.hidden){box.hidden=true;return}box.hidden=false;show(input.value.trim())}}
+function rectGeom(w,s,e,n){const r=v=>+v.toFixed(6);return{type:"Polygon",coordinates:[[[r(w),r(s)],[r(e),r(s)],[r(e),r(n)],[r(w),r(n)],[r(w),r(s)]]]}}
+
+/* ---------- overview */
+function baseMap(el){const map=L.map(el);L.tileLayer("__MAP_TILES__"/* services.map_tiles, filled in by the server */,{maxZoom:19,attribution:"© OpenStreetMap contributors"}).addTo(map);
+  /* Leaflet measures its box once; a map built before the page is laid out thinks it is 0 px wide and every fit
+     zooms in to the maximum. Re-measure whenever the box changes, and before each fit. */
+  if(window.ResizeObserver)new ResizeObserver(()=>map.invalidateSize()).observe(el);
+  const fit=map.fitBounds.bind(map);map.fitBounds=(b,o)=>{map.invalidateSize();return fit(b,o)};return map}
+async function vOverview(m){const o=await api(`p/${S.pid}/overview`),fr=await api(`p/${S.pid}/frames`),tok=await api("token");
+  const warn=[];if(o.road_standard_generic)warn.push("The road standard still has generic placeholder widths: set the national lane and line widths under Settings.");
+  if(o.platforms.mapillary&&tok.source==="none")warn.push("No Mapillary token stored: add it under Settings.");
+  m.innerHTML=`${warn.length?`<div class="card warn">${warn.map(esc).join("<br>")}</div>`:""}<div class="grid">
+  <div class="card"><h2>${esc(o.name)}</h2><table>
+  <tr><th>Country</th><td>${esc(o.area.country_code)}</td></tr><tr><th>Time zone</th><td>${esc(o.area.timezone)} (UTC ${o.utc_offsets_h.map(v=>(v>=0?"+":"")+v).join(" / ")})</td></tr>
+  <tr><th>Driving side</th><td>${esc(o.area.driving_side||"")}</td></tr><tr><th>Map projection</th><td>${esc(o.area.metric_crs)}</td></tr>
+  <tr><th>Area</th><td>${o.area_km2.toLocaleString()} km²</td></tr><tr><th>Selection</th><td>${esc(o.mode)}</td></tr>
+  <tr><th>Platforms</th><td>${Object.entries(o.platforms).filter(e=>e[1]).map(e=>e[0]).join(", ")}</td></tr>
+  <tr><th>Budget</th><td>${o.budget_gb} GB</td></tr><tr><th>Folder</th><td class="note">${esc(o.folder)}</td></tr></table></div>
+  <div class="card" style="grid-column:span 2;min-width:0"><h2>Area${fr.total?` and selected frames (${fr.total.toLocaleString()}, up to 4,000 shown)`:""}</h2>
+  <div id="map" class="map"></div><div class="legend note"><span><i class="dot" style="background:var(--mly)"></i>Mapillary</span><span><i class="dot" style="background:var(--kv)"></i>KartaView</span></div></div></div>`;
+  const map=baseMap($("#map"));const b=L.geoJSON(o.boundary,{style:{color:"#2457c5",weight:2,fillOpacity:.05}}).addTo(map);map.fitBounds(b.getBounds());
+  const col={m:getComputedStyle(document.documentElement).getPropertyValue("--mly"),k:getComputedStyle(document.documentElement).getPropertyValue("--kv")};
+  fr.points.forEach(([la,lo,p])=>L.circleMarker([la,lo],{radius:2.5,weight:0,fillOpacity:.75,fillColor:col[p]}).addTo(map))}
+
+/* ---------- settings */
+function field(lbl,key,val,type="text",extra=""){return `<label>${esc(lbl)}</label><input data-k="${key}" data-type="${type}" type="${type==="list"?"text":type}" value="${esc(Array.isArray(val)?val.join(", "):val??"")}" ${extra}>`}
+function getv(o,k){return k.split(".").reduce((a,b)=>a==null?a:a[b],o)}
+async function vSettings(m){const c=await api(`p/${S.pid}/config`),e=c.effective,tok=await api("token");const rs=e.step5_osm.road_standard;
+  const lw=rs.lane_width_m,lm=rs.line_width_mm||{};
+  m.innerHTML=`<div class="card row" style="justify-content:space-between"><span class="note">Edit the fields below, then save. Nothing is written until you do.</span>
+  <span class="row"><span class="warn" id="set-n"></span><button class="b p" id="set-go" disabled>Save changes</button></span></div><div class="grid">
+  <div class="card"><h2>Platforms</h2>
+   <label class="row"><input type="checkbox" data-k="platforms.mapillary.enabled" data-type="bool" ${e.platforms.mapillary.enabled?"checked":""}> Mapillary</label>
+   <label class="row"><input type="checkbox" data-k="platforms.kartaview.enabled" data-type="bool" ${e.platforms.kartaview.enabled?"checked":""}> KartaView</label>
+   <label class="row"><input type="checkbox" data-k="platforms.kartaview.bulk_access_approved" data-type="bool" ${e.platforms.kartaview.bulk_access_approved?"checked":""}> KartaView bulk use approved by the platform</label>
+   <p class="note">Without approval, contributor listings stop at 50 pages and requests stay light.</p>
+   <h3>Mapillary token</h3><p class="note ${tok.source==="none"||/environment/.test(tok.source)?"warn":""}">A token stored here goes to Windows Credential Manager and is never shown again.
+   In use now: <b>${tok.source==="none"?"no token":/environment/.test(tok.source)?"the MAPILLARY_TOKEN environment variable set on this computer (not stored here)":"the token stored here"}</b></p>
+   <div class="row"><input id="tok" type="password" autocomplete="off" placeholder="paste the token" style="flex:1"><button class="b" id="tok-go">Store</button></div>
+   <h3>Web services</h3><p class="note">Checks that every service the tool uses still answers (one light request each). Run it before a large collection.</p>
+   <div class="row"><button class="b" id="doc-go">Check services</button><span class="note" id="doc-hint"></span></div><div id="doc-out"></div></div>
+  <div class="card"><h2>What to download</h2>
+   <label>Selection</label><select data-k="step2_regions.mode" data-type="text"><option value="whole_area" ${e.step2_regions.mode==="whole_area"?"selected":""}>Whole area: every capture in the boundary</option>
+   <option value="selected_area" ${e.step2_regions.mode==="selected_area"?"selected":""}>Selected area: every capture inside an area you draw below, per ticked platform</option>
+   <option value="strata" ${e.step2_regions.mode==="strata"?"selected":""}>Strata: squares per stratum, tuning and evaluation halves</option></select>
+   ${field("From date (local, inclusive; empty = no limit)","step2_regions.whole_area.date_from",getv(e,"step2_regions.whole_area.date_from"),"date")}
+   ${field("To date","step2_regions.whole_area.date_to",getv(e,"step2_regions.whole_area.date_to"),"date")}
+   <label class="row"><input type="checkbox" data-k="step2_regions.whole_area.drop_duplicate_drives" data-type="bool" ${getv(e,"step2_regions.whole_area.drop_duplicate_drives")!==false?"checked":""}> Keep one copy of a drive uploaded twice (Whole area only)</label>
+   ${field("Storage budget for images (GB)","storage.budget_gb",e.storage.budget_gb,"number")}
+   <p class="note">Leave both dates empty to download every date. The date range applies to the whole area and the
+   selected area. <b>Selected area</b> handles each ticked platform on its own: all its captures inside the area are
+   downloaded, none is dropped as a copy of a drive on the other platform, and an unticked platform is skipped entirely.</p></div>
+  <div class="card"><h2>Image sizes</h2><p class="note">A comma-separated fallback order: the first size that is available is kept, and each frame records which one it got.</p>
+   ${field("Mapillary ("+MLY_SIZES.join(", ")+")","step3_download.image_sizes.mapillary",getv(e,"step3_download.image_sizes.mapillary"),"list")}
+   ${field("KartaView ("+KV_SIZES.join(", ")+")","step3_download.image_sizes.kartaview",getv(e,"step3_download.image_sizes.kartaview"),"list")}
+   ${field("Extra Mapillary sizes for a sample","step3_download.extra_sizes.mapillary",getv(e,"step3_download.extra_sizes.mapillary")||[],"list")}
+   ${field("Extra KartaView sizes for a sample","step3_download.extra_sizes.kartaview",getv(e,"step3_download.extra_sizes.kartaview")||[],"list")}
+   ${field("Share of frames that get the extra sizes (0–1)","step3_download.extra_sample",e.step3_download.extra_sample,"number","step=0.05 min=0 max=1")}
+   <label class="row"><input type="checkbox" data-k="step3_download.panoramas.download" data-type="bool" ${getv(e,"step3_download.panoramas.download")!==false?"checked":""}> Download full panoramas of 360° frames and make views</label>
+   ${field("KartaView panorama sizes (wrapped_lth, wrapped_proc)","step3_download.panoramas.sizes.kartaview",getv(e,"step3_download.panoramas.sizes.kartaview"),"list")}</div>
+  <div class="card"><h2>Road standard</h2><p class="note ${String(rs.source).includes("PLACEHOLDER")?"warn":""}">${esc(rs.source)}</p>
+   ${field("Source (documents the widths come from)","step5_osm.road_standard.source",rs.source)}
+   <div class="grid" style="gap:8px">${Object.entries(lw).map(([k,v])=>field(`Lane width, ${k.replace(/_/g," ")} (m)`,`step5_osm.road_standard.lane_width_m.${k}`,v,"number","step=0.05")).join("")}</div>
+   <h3>Line widths (mm)</h3><div class="grid" style="gap:8px">${Object.entries(lm).map(([k,v])=>field(k.replace(/_/g," "),`step5_osm.road_standard.line_width_mm.${k}`,v,"number")).join("")}</div>
+   ${field("Curb clearance (m)","step5_osm.road_standard.curb_clearance_m",rs.curb_clearance_m,"number","step=0.05")}</div></div>
+  <div class="card"><h2>Download area</h2>
+   <p class="note">Used when Selection is <b>Selected area</b>: Step 1 reads metadata only inside this area, and every capture inside it is downloaded. Draw it inside the project's boundary (dashed). Redrawing the area makes Step 1 run again for the new area.</p>
+   <div class="row"><button class="b" id="sa-rect">Draw rectangle</button><button class="b" id="sa-poly">Draw polygon</button>
+   <button class="b" id="sa-whole" title="Make the download area the same as the project's boundary">Same as the project's area</button>
+   <button class="b" id="sa-clear">Clear</button><button class="b p" id="sa-save" disabled>Save area</button><span class="note" id="sa-hint"></span></div>
+   <div id="sa-map" class="map" style="margin-top:8px"></div><div id="sa-info" class="note" style="margin-top:6px">Loading…</div></div>
+  <div class="card"><h2>project.yaml</h2><p class="note">Every setting the project overrides; the rest comes from the package defaults. Saved only if it is valid; the previous version is kept as project.yaml.bak.</p>
+   <textarea id="yaml" spellcheck="false">${esc(c.yaml)}</textarea><div class="row" style="margin-top:8px"><button class="b p" id="yaml-go">Save project.yaml</button></div></div>`;
+  // Changes are saved only with the Save button, and only for the fields the user edited (input events, not
+  // programmatic changes or restored form state).
+  const val=el=>{let v=el.type==="checkbox"?el.checked:el.value;const t=el.dataset.type;
+    if(t==="number")v=v===""?null:+v;if(t==="list")v=v.split(",").map(s=>s.trim()).filter(Boolean);if(t==="date"||t==="text")v=v===""?null:v;return v};
+  const fields=[...m.querySelectorAll("[data-k]")];fields.forEach(el=>{el.setAttribute("autocomplete","off");el._v0=JSON.stringify(val(el));
+    const mark=e=>{if(!e.isTrusted)return;el._edited=true;const n=fields.filter(f=>f._edited&&JSON.stringify(val(f))!==f._v0).length;
+      $("#set-n").textContent=n?`${n} unsaved change${n>1?"s":""}`:"";$("#set-go").disabled=!n};
+    el.addEventListener("input",mark);el.addEventListener("change",mark)});
+  $("#set-go").onclick=async()=>{const ch=fields.filter(f=>f._edited&&JSON.stringify(val(f))!==f._v0);
+    for(const el of ch){const v=val(el);if(el.dataset.k.startsWith("step3_download.image_sizes.")){const ok=el.dataset.k.endsWith("mapillary")?MLY_SIZES:KV_SIZES;
+      const bad=v.filter(x=>!ok.includes(x));if(bad.length)return toast("Unknown size: "+bad.join(", "),"bad")}}
+    try{for(const el of ch)await api(`p/${S.pid}/setting`,{method:"POST",body:{key:el.dataset.k,value:val(el)}});toast(`Saved ${ch.length} setting(s)`,"ok");render()}
+    catch(e){toast(e.message,"bad")}};
+  $("#doc-go").onclick=async()=>{$("#doc-go").disabled=true;$("#doc-hint").textContent="checking (about 10 seconds)...";
+    try{const r=await api(`p/${S.pid}/doctor`);const bad=r.checks.filter(c=>c.ok===false).length;
+      $("#doc-hint").innerHTML=bad?`<span class="bad">${bad} service(s) did not answer</span>`:`<span class="ok">all services answer</span>`;
+      $("#doc-out").innerHTML=`<table style="margin-top:8px">${r.checks.map(c=>`<tr><td class="${c.ok?"ok":c.ok===false?"bad":"note"}" style="white-space:nowrap">${c.ok?"ok":c.ok===false?"failed":"skipped"}</td>
+        <td><b>${esc(c.service)}</b> <span class="note">${esc(c.host)}${c.ms!=null?` · ${c.ms} ms`:""}</span><div class="note">${esc(c.detail)}${c.ok===false?` · if it moved or has a new version, change <code>${esc(c.setting)}</code> in project.yaml`:""}</div></td></tr>`).join("")}</table>`}
+    catch(e){$("#doc-hint").textContent="";toast(e.message,"bad")}finally{$("#doc-go").disabled=false}};
+  $("#tok-go").onclick=async()=>{const t=$("#tok").value.trim();if(!t)return;try{await api("token",{method:"POST",body:{token:t}});$("#tok").value="";toast("Token stored","ok");render()}catch(e){toast(e.message,"bad")}};
+  $("#yaml-go").onclick=async()=>{try{await api(`p/${S.pid}/config`,{method:"PUT",body:{yaml:$("#yaml").value}});toast("project.yaml saved","ok")}catch(e){toast(e.message,"bad")}};
+  selectedAreaEditor()}
+
+/* Settings > Download area: draw, save, and count the captures inside */
+function drawingTools(map,b,onGeom){const D={mode:null,pts:[],tmp:null};let start=null;
+  const stop=()=>{D.mode=null;D.pts=[];start=null;if(D.tmp){map.removeLayer(D.tmp);D.tmp=null}map.dragging.enable();b.hint.textContent="";map.getContainer().style.cursor=""};
+  b.rect.onclick=()=>{stop();D.mode="rect";map.dragging.disable();map.getContainer().style.cursor="crosshair";b.hint.textContent="Press and drag on the map."};
+  b.poly.onclick=()=>{stop();D.mode="poly";map.getContainer().style.cursor="crosshair";b.hint.textContent="Click the corners; double-click (or click the first corner) to finish."};
+  map.doubleClickZoom.disable();
+  map.on("mousedown",e=>{if(D.mode==="rect")start=e.latlng});
+  map.on("mousemove",e=>{if(D.mode==="rect"&&start){const bb=L.latLngBounds(start,e.latlng);if(D.tmp)D.tmp.setBounds(bb);else D.tmp=L.rectangle(bb,{color:"#c2410c",weight:1,dashArray:"4"}).addTo(map)}
+    if(D.mode==="poly"&&D.pts.length){const ll=[...D.pts,e.latlng];if(D.tmp)D.tmp.setLatLngs(ll);else D.tmp=L.polyline(ll,{color:"#c2410c",weight:1,dashArray:"4"}).addTo(map)}});
+  map.on("mouseup",e=>{if(D.mode!=="rect"||!start)return;const bb=L.latLngBounds(start,e.latlng);stop();if(bb.getNorth()-bb.getSouth()<1e-4)return;
+    onGeom(rectGeom(bb.getWest(),bb.getSouth(),bb.getEast(),bb.getNorth()),"drawn rectangle")});
+  const fin=()=>{const pts=D.pts.slice();stop();if(pts.length<3)return toast("A polygon needs at least 3 corners","bad");
+    const ring=pts.map(p=>[+p.lng.toFixed(6),+p.lat.toFixed(6)]);ring.push(ring[0]);onGeom({type:"Polygon",coordinates:[ring]},"drawn polygon")};
+  map.on("click",e=>{if(D.mode!=="poly")return;if(D.pts.length>2&&map.latLngToContainerPoint(D.pts[0]).distanceTo(map.latLngToContainerPoint(e.latlng))<10)return fin();D.pts.push(e.latlng)});
+  map.on("dblclick",()=>{if(D.mode==="poly")fin()});return{stop}}
+async function selectedAreaEditor(){const r=await api(`p/${S.pid}/selected_area`);const map=baseMap($("#sa-map"));
+  const bnd=L.geoJSON(r.boundary,{style:{color:"#2457c5",weight:1.5,dashArray:"5",fillOpacity:.03}}).addTo(map);map.fitBounds(bnd.getBounds());
+  let lay=null,pending=null;const show=g=>{if(lay)map.removeLayer(lay);lay=g?L.geoJSON(g,{style:{color:"#c2410c",weight:2,fillOpacity:.15}}).addTo(map):null};
+  const info=v=>{const c=v.counts;$("#sa-info").innerHTML=v.geometry?`<b>Saved area:</b> ${v.km2} km²`+(c?" · captures inside: "+Object.entries(c).map(([k,x])=>`${k} ${x.inside.toLocaleString()} of ${x.all.toLocaleString()}`).join(", "):
+    " · run Step 1 to see how many captures fall inside"):"No area saved yet."};
+  show(r.geometry);if(r.geometry)map.fitBounds(lay.getBounds(),{maxZoom:15,padding:[30,30]});info(r);
+  drawingTools(map,{rect:$("#sa-rect"),poly:$("#sa-poly"),hint:$("#sa-hint")},(g,label)=>{pending=g;show(g);$("#sa-save").disabled=false;
+    $("#sa-info").innerHTML=`<span class="warn">Unsaved ${esc(label)}, ${km2(g)<10?km2(g).toFixed(2):Math.round(km2(g))} km²: press Save area.</span>`});
+  $("#sa-whole").onclick=()=>{pending=r.boundary;show(r.boundary);map.fitBounds(lay.getBounds(),{padding:[20,20]});$("#sa-save").disabled=false;
+    $("#sa-info").innerHTML=`<span class="warn">Download area set to the project's whole area, ${km2(r.boundary)<10?km2(r.boundary).toFixed(2):Math.round(km2(r.boundary))} km²: press Save area.</span>`};
+  $("#sa-clear").onclick=()=>{pending={clear:true};show(null);$("#sa-save").disabled=false;$("#sa-info").innerHTML=`<span class="warn">Area cleared: press Save area to remove it.</span>`};
+  $("#sa-save").onclick=async()=>{try{const v=await api(`p/${S.pid}/selected_area`,{method:"POST",body:{geometry:pending&&pending.clear?null:pending}});
+    $("#sa-save").disabled=true;pending=null;show(v.geometry);info(v);toast(v.saved?(v.clipped_to_boundary?"Area saved (clipped to the project's boundary)":"Area saved"):"Area removed","ok")}
+    catch(e){toast(e.message,"bad")}}}
+
+/* ---------- run */
+const fmtT=t=>t?t.replace("T"," ").slice(0,16)+" UTC":"";
+function fmtSummary(s){if(!s)return"";return Object.entries(s).map(([k,v])=>`${k}: ${typeof v==="object"?JSON.stringify(v):v}`).join("; ")}
+function dur(s){if(s==null)return"";s=Math.round(s);if(s<60)return s+" s";if(s<3600)return Math.round(s/60)+" min";return (s/3600).toFixed(1)+" h"}
+function progressHTML(job,steps){const p=job.progress,running=job.state==="running";
+  if(!job.steps||!job.steps.length)return"";
+  const list=job.steps,done=(job.steps_done||[]).length+(job.steps_skipped||[]).length;
+  const cur=running&&p&&p.state==="running"?p:null;const idx=cur?list.indexOf(cur.step):-1;
+  const totalPct=list.length?Math.min(100,100*(done+(cur&&cur.total?cur.done/cur.total:0))/list.length):0;
+  let curHTML="";
+  /* one bar: the main run's current step, or one platform lane (Mapillary and KartaView run in parallel lanes) */
+  const bar=(c,head)=>{const det=c.total>0,pct=det?Math.min(100,100*c.done/c.total):(c.state==="done"?100:0),live=c.state==="running";
+    const nums=det?`${(+c.done).toLocaleString()} of ${(+c.total).toLocaleString()} ${esc(c.unit||"")}`:esc(c.message||"working");
+    const rate=c.rate_per_s?` · ${c.rate_per_s>=1?c.rate_per_s.toFixed(1):c.rate_per_s.toFixed(2)} ${esc(c.unit||"")}/s`:"";
+    const req=c.extra&&c.extra.rate?` · <b>${esc(c.extra.rate)}</b>`:"";
+    return `<div class="row" style="justify-content:space-between;margin-top:12px"><b>${head}</b>
+      <span class="note">${det||!live?Math.floor(pct)+"%":""}</span></div>
+      <div class="bar ${det||!live?"":"ind"} ${c.state==="failed"?"bad":c.state==="done"?"ok":""}" style="margin-top:6px"><i style="width:${det||!live?pct:30}%"></i></div>
+      <div class="note" style="margin-top:4px">${live?`${nums}${rate}${req}${c.eta_s!=null?` · about ${dur(c.eta_s)} left`:""} · running for ${dur(c.elapsed_s)}
+      ${det&&c.message?` · ${esc(c.message)}`:""}`:esc(c.message||c.state)}</div>`};
+  if(cur){curHTML=bar(cur,`Step ${esc(cur.step)}: ${esc(cur.title)}`);
+    for(const [pf,p] of Object.entries(job.lanes||{}))
+      curHTML+=`<div style="margin-left:18px">${bar(p,`${pf==="mapillary"?"Mapillary":"KartaView"} lane · step ${esc(p.step)}: ${esc(p.title)}`)}</div>`}
+  else if(!running&&job.state!=="idle"){const okEnd=job.state==="finished";
+    curHTML=`<div class="note" style="margin-top:8px">${okEnd?"All steps of this run finished.":"The run stopped."}</div>`}
+  return `<div class="card ${job.state==="failed"?"box-bad":running?"":"box-ok"}"><h2>Progress</h2>
+   <div class="row" style="justify-content:space-between"><span>Run: step ${Math.min(done+(cur?1:0),list.length)} of ${list.length}
+    <span class="note">(${list.map(x=>esc(x)).join(" ")})</span></span><span class="note">${Math.floor(totalPct)}%</span></div>
+   <div class="bar ${job.state==="failed"?"bad":(!running&&job.state==="finished")?"ok":""}" style="margin-top:6px"><i style="width:${totalPct}%"></i></div>
+   ${curHTML}${job.stall?`<div class="card box-warn" style="margin:12px 0 0"><b>${esc(job.stall.title)}</b><div class="note">${esc(job.stall.cause)}</div><div>${esc(job.stall.fix)}</div></div>`:""}</div>`}
+function errorHTML(e){if(!e)return"";return `<div class="card box-bad"><h2 class="bad">${esc(e.title)}</h2>
+  <p><b>Why:</b> ${esc(e.cause)}</p><p><b>What to try:</b> ${esc(e.fix)}</p>
+  <div class="row">${(e.rule==="needs_step"||e.rule==="interrupted")?`<button class="b p" id="err-retry" data-s="all">Run all</button>`:
+    `<button class="b p" id="err-retry" data-s="${esc(e.step)}">Run step ${esc(e.step)} again</button>`}
+  <span class="note">Step ${esc(e.step)}${e.time_utc?" · "+esc(fmtT(e.time_utc)):""}</span></div>
+  ${e.detail?`<details style="margin-top:8px"><summary>Technical details</summary><pre class="log">${esc(e.detail)}</pre></details>`:""}</div>`}
+function preflightHTML(pf){if(!pf)return"";const items=[...pf.blocking.map(x=>({...x,c:"bad",k:"Blocks the run"})),...pf.warnings.map(x=>({...x,c:"warn",k:"Warning"}))];
+  if(!items.length)return `<div class="card box-ok"><b class="ok">Ready:</b> nothing blocks a run.</div>`;
+  return `<div class="card ${pf.blocking.length?"box-bad":"box-warn"}"><h2>Before you run</h2><table>${items.map(x=>`<tr><td class="${x.c}" style="white-space:nowrap">${x.k}</td><td><b>${esc(x.what)}</b><div class="note">${esc(x.fix)}</div></td></tr>`).join("")}</table></div>`}
+async function vRun(m){
+  const draw=async()=>{const [j,job,pf]=await Promise.all([api(`p/${S.pid}/steps`),api(`p/${S.pid}/job?n=250`),api(`p/${S.pid}/preflight`)]);const running=job.state==="running";
+  m.innerHTML=`${running?"":preflightHTML(pf)}<div id="prog">${progressHTML(job)}</div><div id="err">${running?"":errorHTML(job.error)}</div>
+  <div class="card"><h2>Steps</h2><table><tr><th></th><th>Step</th><th>Status</th><th>Result</th></tr>
+  ${j.steps.map(s=>`<tr><td><input type="checkbox" class="st" value="${s.step}"></td><td><b>${s.step}</b> ${esc(s.title)}</td>
+   <td class="${s.status==="ok"?"ok":s.status==="failed"?"bad":(s.status==="running"||s.status==="interrupted")?"warn":"muted"}">${esc(s.status)}<div class="note">${esc(fmtT(s.finished_utc))}</div></td>
+   <td class="note">${esc(s.error||fmtSummary(s.summary))}</td></tr>`).join("")}</table>
+  <div class="row" style="margin-top:10px"><button class="b p" id="r-all" ${running?"disabled":""}>Run all (skips what is up to date)</button>
+  <button class="b" id="r-sel" ${running?"disabled":""}>Run selected</button>
+  <label class="row"><input type="checkbox" id="r-off"> offline (use only what is on disk)</label>
+  <label class="row"><input type="checkbox" id="r-force"> force rerun</label>
+  <button class="b" id="r-stop" ${running?"":"disabled"}>Stop</button></div>
+  <p class="note">Steps run as a separate process: closing this page does not stop them. Gates: after 2e (strata) and 3f, check the Review page before going on.</p></div>
+  <div class="card"><h2>Log: <span class="${job.state==="failed"?"bad":job.state==="running"?"warn":"ok"}">${esc(job.state)}</span></h2><pre class="log" id="log">${esc(job.tail||"")}</pre></div>`;
+  const lg=$("#log");lg.scrollTop=lg.scrollHeight;
+  const go=async steps=>{if(pf.blocking.length&&!$("#r-off").checked&&!confirm("Something blocks the run (see 'Before you run'). Start anyway?"))return;
+    try{await api(`p/${S.pid}/run`,{method:"POST",body:{steps,offline:$("#r-off").checked,force:$("#r-force").checked}});await draw();poll()}catch(e){toast(e.message,"bad")}};
+  $("#r-all").onclick=()=>go(["all"]);$("#r-sel").onclick=()=>{const s=[...document.querySelectorAll(".st:checked")].map(x=>x.value);if(!s.length)return toast("Tick the steps to run");go(s)};
+  $("#r-stop").onclick=async()=>{await api(`p/${S.pid}/job/stop`,{method:"POST"});draw()};
+  const rb=$("#err-retry");if(rb)rb.onclick=()=>go([rb.dataset.s])};   // "all" runs every step in order
+  const poll=()=>{clearInterval(S.timer);S.timer=setInterval(async()=>{if(S.tab!=="run")return clearInterval(S.timer);
+    const job=await api(`p/${S.pid}/job?n=250`);if(job.state==="running"){$("#prog").innerHTML=progressHTML(job);const lg=$("#log");if(lg){lg.textContent=job.tail;lg.scrollTop=lg.scrollHeight}}
+    else{clearInterval(S.timer);draw()}},2000)};
+  await draw();poll()}
+
+/* ---------- review */
+async function vReview(m){m.innerHTML=`<div id="rv-sel"></div><div id="rv-mis"></div><div id="rv-cls"></div>`;
+  await Promise.all([rvSelection($("#rv-sel")),rvMis($("#rv-mis")),rvClasses($("#rv-cls"))])}
+async function rvSelection(el){const r=await api(`p/${S.pid}/review/selection`);
+  if(r.mode!=="strata"){el.innerHTML=`<div class="card"><h2>Region selection</h2><p class="note">Whole-area mode: there is no square selection to review.</p></div>`;return}
+  if(!r.ready){el.innerHTML=`<div class="card"><h2>Region selection</h2><p class="note">Run steps 2a to 2e first.</p></div>`;return}
+  const picks=new Map((r.accepted||r.draft).map(d=>[d.cell,d.stratum]));
+  el.innerHTML=`<div class="card"><h2>Region selection ${r.accepted?'<span class="chip">accepted list saved</span>':'<span class="chip">draft</span>'}</h2>
+  <p class="note">Click a square to add it to or remove it from the selection under the chosen stratum. Blue = selected, green = meets all plan rules, gray = does not.</p>
+  <div class="row"><label>Stratum for new picks</label><select id="sel-st" style="width:auto">${r.strata.map(s=>`<option>${esc(s)}</option>`).join("")}</select>
+  <button class="b p" id="sel-save">Save accepted selection</button><span class="note" id="sel-n"></span></div>
+  <div id="sel-map" class="map" style="margin-top:8px"></div><div id="sel-list" class="note" style="margin-top:8px"></div></div>`;
+  const map=baseMap($("#sel-map"));
+  const style=f=>{const p=f.properties,on=picks.has(p.cell);return{weight:on?2:.5,color:on?"#2457c5":"#666",fillColor:on?"#2457c5":p.valid?"#2e8b57":"#999",fillOpacity:on?.45:p.valid?.25:.08}};
+  const lay=L.geoJSON(r.cells,{style,onEachFeature:(f,l)=>{const p=f.properties;
+    l.bindTooltip(`${esc(p.cell)} ${esc(p.label||"")}<br>strata: ${r.strata.filter(s=>p["s_"+s]).join(", ")||"none"}<br>rules met ${p.rules_met}/3, ≥3 passes ${(p.share_ge3*100||0).toFixed(0)}%, seq ${p.seq_mly}+${p.seq_kv}`);
+    l.on("click",()=>{if(picks.has(p.cell))picks.delete(p.cell);else picks.set(p.cell,$("#sel-st").value);lay.setStyle(style);list()})}}).addTo(map);
+  map.fitBounds(lay.getBounds());
+  const list=()=>{$("#sel-n").textContent=`${picks.size} squares`;$("#sel-list").textContent=[...picks].map(([c,s])=>`${c} (${s})`).join(", ")};list();
+  $("#sel-save").onclick=async()=>{try{const j=await api(`p/${S.pid}/review/selection`,{method:"POST",body:{picks:[...picks].map(([cell,stratum])=>({cell,stratum}))}});toast(`Saved ${j.saved} squares; rerun from step 2f`,"ok")}catch(e){toast(e.message,"bad")}}}
+async function rvMis(el){const r=await api(`p/${S.pid}/review/mis_stitched`);
+  if(!r.ready){el.innerHTML=`<div class="card"><h2>Mis-stitched panoramas</h2><p class="note">Run step 3f first.</p></div>`;return}
+  el.innerHTML=`<div class="card"><h2>Mis-stitched panoramas <span class="chip">${r.outliers.length} flagged of ${r.panoramas.toLocaleString()}</span> ${r.decided?'<span class="chip">decision saved</span>':""}</h2>
+  <p class="note">Flagged when the picture band's edge is far from its sequence's usual edge. Untick a panorama that looks fine; ticked ones are marked mis_stitched and not cropped (files are kept).</p>
+  <div class="thumbs">${r.outliers.slice(0,200).map((o,i)=>`<div class="thumb"><img loading="lazy" src="/api/p/${S.pid}/img?root=panoramas&w=480&path=${encodeURIComponent(o.platform+"/"+o.sequence_id+"/"+o.frame_id+".jpg")}" alt="">
+  <label class="row"><input type="checkbox" class="ms" data-i="${i}" ${o.accepted?"checked":""}> mis-stitched</label>
+  <div class="note">${esc(o.sequence_id)} / ${esc(o.frame_id)}<br>band ${o.top}° / ${o.bottom}° (sequence ${o.seq_top}° / ${o.seq_bottom}°)</div></div>`).join("")||'<p class="note">None flagged.</p>'}</div>
+  ${r.outliers.length>200?`<p class="note">Showing the first 200.</p>`:""}
+  <div class="row" style="margin-top:10px"><button class="b p" id="ms-save" ${r.outliers.length?"":"disabled"}>Save decision</button></div></div>`;
+  const b=$("#ms-save");if(b)b.onclick=async()=>{const fr=[...document.querySelectorAll(".ms:checked")].map(x=>r.outliers[+x.dataset.i]);
+    try{const j=await api(`p/${S.pid}/review/mis_stitched`,{method:"POST",body:{frames:fr}});toast(`Saved ${j.saved}; ${j.note}`,"ok")}catch(e){toast(e.message,"bad")}}}
+async function rvClasses(el){const r=await api(`p/${S.pid}/review/classes`);
+  if(!r.ready){el.innerHTML=`<div class="card"><h2>Capture class</h2><p class="note">Run step 3g first.</p></div>`;return}
+  el.innerHTML=`<div class="card"><h2>Capture class of panorama sequences</h2>
+  <p class="note">Vehicle sequences are turned so that “front” faces travel; carried ones keep the panorama center. Look at the bottom of the panoramas (bonnet, rider, person) and correct the class where the rule is wrong.</p>
+  <table><tr><th>Sequence</th><th>Panoramas</th><th>Samples</th><th>Class</th></tr>
+  ${r.sequences.map((s,i)=>`<tr><td>${esc(s.platform)}<div class="note">${esc(s.sequence_id)}<br>${esc(s.device)}</div></td><td>${s.panoramas}</td>
+   <td><div class="row">${s.sample.map(p=>`<img loading="lazy" style="width:180px;border-radius:4px" src="/api/p/${S.pid}/img?root=panoramas&w=360&path=${encodeURIComponent(p)}" alt="">`).join("")}</div></td>
+   <td><select class="cls" data-s="${esc(s.sequence_id)}">${r.classes.map(c=>`<option ${c===(s.override||s.class)?"selected":""}>${c}</option>`).join("")}</select>
+   <div class="note">${s.override?"override":"from the rules"}</div></td></tr>`).join("")||'<tr><td colspan=4 class="muted">No panorama sequences.</td></tr>'}</table>
+  <div class="row" style="margin-top:10px"><button class="b p" id="cls-save" ${r.sequences.length?"":"disabled"}>Save classes</button></div></div>`;
+  const b=$("#cls-save");if(b)b.onclick=async()=>{const ov={};document.querySelectorAll(".cls").forEach(x=>{const s=r.sequences.find(q=>q.sequence_id===x.dataset.s);if(x.value!==s.class||s.override)ov[x.dataset.s]=x.value});
+    try{const j=await api(`p/${S.pid}/review/classes`,{method:"POST",body:{overrides:ov}});toast(`Saved ${j.saved} override(s); ${j.note}`,"ok")}catch(e){toast(e.message,"bad")}}}
+
+/* ---------- report */
+function md(t){const L=t.split("\n");let h="",inT=false,inL=false;
+  const inl=s=>esc(s).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/`(.+?)`/g,"<code>$1</code>");
+  for(const l of L){if(l.startsWith("|")){if(/^\|[-| ]+\|$/.test(l))continue;const c=l.slice(1,-1).split("|").map(x=>x.trim());
+      if(!inT){h+="<table><tr>"+c.map(x=>`<th>${inl(x)}</th>`).join("")+"</tr>";inT=true}else h+="<tr>"+c.map(x=>`<td>${inl(x)}</td>`).join("")+"</tr>";continue}
+    if(inT){h+="</table>";inT=false}
+    if(l.startsWith("- ")){if(!inL){h+="<ul>";inL=true}h+=`<li>${inl(l.slice(2))}</li>`;continue}if(inL){h+="</ul>";inL=false}
+    const m=l.match(/^(#{1,3}) (.*)/);if(m){h+=`<h${m[1].length}>${inl(m[2])}</h${m[1].length}>`;continue}if(l.trim())h+=`<p>${inl(l)}</p>`}
+  if(inT)h+="</table>";if(inL)h+="</ul>";return h}
+async function vReport(m){const r=await api(`p/${S.pid}/report`);
+  m.innerHTML=`${r.estimate.length?`<div class="card"><h2>Storage estimate (step 3a)</h2><table><tr><th>Platform</th><th>Size</th><th>Available</th><th>MB a frame</th><th>Frames</th><th>Estimated GB</th></tr>
+   ${r.estimate.map(e=>`<tr><td>${esc(e.platform)}</td><td>${esc(e.size)}</td><td>${e.available} of ${e.sampled}</td><td>${e.mb_per_frame??"–"}</td><td>${(+e.frames).toLocaleString()}</td><td>${e.est_gb??"–"} <span class="note">/ ${e.budget_gb}</span></td></tr>`).join("")}</table></div>`:""}
+  <div class="card report">${r.report?md(r.report):'<p class="note">No report yet: run step 6a.</p>'}</div>`}
+
+loadProjects().then(render).catch(e=>{$("#main").innerHTML=`<div class="card bad">${esc(e.message)}</div>`});
+</script>
+</body>
+</html>

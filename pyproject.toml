@@ -1,0 +1,41 @@
+[project]
+name = "collect-street-imagery"
+version = "1.0.0"
+description = "Crowdsourced Street-level Imagery Downloader: street-level imagery (Mapillary, KartaView) and OpenStreetMap context for any study area, with a local browser interface"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+dependencies = [
+    "pyyaml>=6",
+    "typer>=0.12",
+    "pandas>=2.2",
+    "pyarrow>=15",
+    "numpy>=1.26",
+    "shapely>=2.0",
+    "pyproj>=3.6",
+    "osmium>=3.7",
+    "requests>=2.31",
+    "opencv-python-headless>=4.8",
+    "mapbox-vector-tile>=2.0",
+    "pillow>=10",
+    "tzdata",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.scripts]
+collect = "collect.cli:app"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["collect*"]
+
+[tool.setuptools.package-data]
+collect = ["defaults.yaml", "ui/index.html", "ui/static/leaflet/*", "ui/static/leaflet/images/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/unit"]

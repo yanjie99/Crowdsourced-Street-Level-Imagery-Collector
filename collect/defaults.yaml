@@ -1,0 +1,309 @@
+# Defaults for every project (method settings and generic starting values). project.yaml only needs what is
+# local to its area; anything it sets overrides the value here. Built 18 Nov 2026 from the Singapore settings
+# with the Singapore-only values removed (boundary, HDB layer and stratum, LTA road standard, bulk approval).
+# Web services the tool talks to (19 Nov 2026). If a service moves or releases a new version, change the address here
+# (or in a project's project.yaml) instead of the code. `collect doctor` checks that each one still answers.
+# Platform APIs with a version in the address are also here: platforms.mapillary.tiles_url, platforms.kartaview.api,
+# osm.history_api.
+services:
+  mapillary_graph: https://graph.mapillary.com
+  nominatim: https://nominatim.openstreetmap.org
+  geofabrik: https://download.geofabrik.de
+  map_tiles: https://tile.openstreetmap.org/{z}/{x}/{y}.png     # background map of the browser pages
+platforms:
+  mapillary:
+    enabled: true
+    token: keyring:mapillary
+    tiles_url: https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}
+    tile_zoom: 14
+    graph_batch: 50
+    graph_per_s: 3.0
+    files_per_s: 8.0
+    workers: 6
+    image_size: thumb_2048
+    license: CC BY-SA 4.0, credit © Mapillary
+  kartaview:
+    enabled: true
+    api: https://api.kartaview.org/2.0
+    bulk_access_approved: false
+    per_s: 2.0               # starting rate (requests a second, shared by every worker of a step)
+    # Adaptive rate (19 Nov 2026): rises by `step` after `every` quick, error-free replies, up to max_per_s, but only
+    # when bulk_access_approved is true (otherwise per_s is also the cap). It falls at once on strain: halved on 429,
+    # 5xx or a timeout (down to min_per_s), one step down (not below floor_per_s) when replies take twice the usual time,
+    # and it waits as long as a Retry-After header asks.
+    adaptive:
+      enabled: true
+      max_per_s: 5.0
+      floor_per_s: 2.0
+      min_per_s: 0.5
+      step: 0.5
+      every: 60
+    workers: 6               # parallel requests (photo lists, downloads); the rate above still limits them
+    sweep_spacing_m: 650
+    sweep_radius_m: 500
+    listing_buffer_deg: 0.05
+    image_size: lth
+    license: CC BY-SA 4.0, credit © Grab and KartaView Contributors
+  # How the tool names itself to every server (platforms, Nominatim, Geofabrik, ohsome), with a contact as Nominatim's
+  # usage policy asks. Replace <your name> and <your email> with your own (or set platforms.user_agent in
+  # project.yaml). Optional: replace <project page> with the project's web address, or delete "; <project page>".
+  user_agent: "Crowdsourced Street-level Imagery Downloader (collect; contact: <your name>, <your email>; <project page>)"
+  # Run Mapillary and KartaView at the same time (19 Nov 2026): Step 1's platform steps (1a-1b and 1c-1f) and steps
+  # 3b and 3d run as two parallel lanes, one per platform. Each platform keeps its own rate, so neither gets more requests.
+  parallel: true
+osm:
+  history_api: https://api.ohsome.org/v1
+  camera_highways:
+  - motorway
+  - trunk
+  - primary
+  - secondary
+  - tertiary
+  - unclassified
+  - residential
+  - motorway_link
+  - trunk_link
+  - primary_link
+  - secondary_link
+  - tertiary_link
+  - living_street
+  - service
+  - road
+  - busway
+  - track
+  - pedestrian
+  - footway
+  - path
+  - cycleway
+  - bridleway
+  - steps
+  not_for_vehicles:
+  - footway
+  - path
+  - pedestrian
+  - steps
+  - cycleway
+  - bridleway
+  street_highways:
+  - motorway
+  - trunk
+  - primary
+  - secondary
+  - tertiary
+  - motorway_link
+  - trunk_link
+  - primary_link
+  - secondary_link
+  - tertiary_link
+  - unclassified
+  - residential
+  - living_street
+  - road
+  - busway
+step1_harvest:
+  min_year: 2013
+  camera_reset_dates: []
+  move_m: 1.0
+  min_moving_captures: 20
+  segment_max_len_m: 100.0
+  match:
+    max_dist_m: 20.0
+    max_angle_deg: 45.0
+    turn_penalty_m: 15.0
+  vehicle:
+    median_kmh: 25.0
+    p90_kmh: 40.0
+    min_steps_p90: 10
+    car_devices:
+    - waylens
+    - kartacam360
+    - dashview
+  pass_definition: one contributor on one local date
+  duplicates:
+    max_dt_s: 5.0
+    max_dist_m: 30.0
+    min_matched: 10
+    min_share: 0.3
+    bin_s: 10
+  clock_check:
+    night_hours:
+    - 0
+    - 6
+    min_night_share: 0.5
+    shifted_day_hours:
+    - 7
+    - 19
+    min_shifted_day_share: 0.9
+    min_captures: 100
+step2_regions:
+  mode: whole_area
+  whole_area:
+    date_from: null
+    date_to: null
+    drop_duplicate_drives: true
+    platforms: null
+  cell_m: 1000
+  min_captures_per_cell: 5
+  min_passes: 3
+  clip_buffer_frames: 20
+  local_layers: {}
+  rules:
+    min_own_share_each_platform: 0.2
+    min_share_passes: 0.5
+    max_top_contributor_share: 0.5
+  block_min_footprint_m2: 600
+  industrial_landuse:
+  - industrial
+  - port
+  building_types:
+    landed:
+    - house
+    - terrace
+    - detached
+    - semidetached_house
+    - bungalow
+    blocks:
+    - apartments
+    - residential
+    - dormitory
+  tall_building:
+    min_levels: 20
+    min_height_m: 60
+  strata:
+    core:
+      rule: tall_non_res >= 5
+      feature: tall_non_res
+      picks: 3
+      min_gap_m: 2000
+    expressway:
+      rule: motorway_km >= 1 and (motorway_tunnel_km >= 0.2 or motorway_bridge_km
+        >= 0.3)
+      feature: motorway_tunnel_bridge
+    landed:
+      rule: landed_houses >= 150 and residential_share >= 0.4
+      feature: landed_houses
+    industrial:
+      rule: industrial_share >= 0.4
+      feature: industrial_share
+    junctions:
+      rule: junctions >= 80
+      feature: junctions
+  selection:
+    picks_per_stratum: 4
+    min_gap_m: 3000
+    order:
+    - industrial
+    - expressway
+    - landed
+    - core
+    - junctions
+  split:
+    recent_year: 2022
+    balance:
+    - 0.4
+    - 0.6
+    max_recent_gap: 0.05
+storage:
+  budget_gb: 50
+  mb_per_frame:
+    kartaview: 0.404
+    mapillary: 0.38
+step3_download:
+  image_sizes:
+    mapillary:
+    - thumb_2048
+    kartaview:
+    - lth
+  extra_sizes: {}
+  extra_sample: 1.0
+  estimate_sample: 20
+  workers: 16
+  capture_class:
+    rules:
+    - platform: kartaview
+      class: vehicle
+    - platform: mapillary
+      device_contains: GoPro
+      class: two_wheeler
+    - platform: mapillary
+      class: on_foot
+    overrides: {}
+  travel_yaw:
+    min_frames: 10
+    min_agree: 0.5
+    fallback_deg:
+      kartaview: 0.0
+  working_copy:
+    width: 1024
+    jpeg_quality: 90
+  black_max_value: 8
+  panoramas:
+    download: true
+    sizes:
+      kartaview:
+      - wrapped_lth
+      mapillary:
+      - original
+  crop:
+    views:
+      front: 0
+      right: 90
+      back: 180
+      left: 270
+    hfov_deg: 90.0
+    pitch_down_deg: 5.0
+    size:
+    - 1024
+    - 576
+    view_min_valid: 0.99
+    pano_min_valid: 0.2
+    coverage_tol_deg: 8.0
+    jpeg_quality: 95
+    level_min_deg: 0.01
+    travel_yaw_min_span_m: 3.0
+    masks: zip
+step5_osm:
+  history_margin_m: 100.0
+  history_simplify_m: 10.0
+  history_pause_s: 3.0
+  match:
+    max_dist_m: 20.0
+    max_angle_deg: 45.0
+    penalty_m: 15.0
+    min_step_m: 1.0
+  lanes_default_min_tagged: 20
+  road_standard:
+    source: 'GENERIC PLACEHOLDER: replace with the national road-design and road-marking
+      standards'
+    lane_width_m:
+      expressway: 3.5
+      curb_lane: 3.5
+      inner_lane: 3.25
+      one_lane_oneway: 5.0
+      undivided_lane: 3.25
+      slip_two_lane: 7.0
+      service_road: 6.0
+    shoulders_m:
+      motorway:
+      - 2.5
+      - 0.75
+      motorway_link:
+      - 1.5
+      - 0.5
+    curb_clearance_m: 0.3
+    line_width_mm:
+      lane_line: 100
+      lane_line_expressway: 100
+      center_line: 150
+      edge_line_divider: 200
+      edge_line_shoulder: 300
+    lane_line_pattern_m:
+      other_roads:
+      - 4
+      - 2
+      expressway:
+      - 2
+      - 10
+      center_line:
+      - 2.75
+      - 2.75

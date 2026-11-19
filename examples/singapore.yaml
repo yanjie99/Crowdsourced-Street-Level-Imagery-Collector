@@ -1,0 +1,212 @@
+# Example: the Singapore descriptor-validation run (strata mode), every setting written out.
+# Project configuration: the Singapore run as the reference example (Phase 0, 18 Nov 2026).
+# Every value the step scripts in D:\CaseStudy_SG had written into their code, as one parameter sheet.
+# Kinds (see config_inventory.md): local = must be set for each study area; derived = the app proposes it
+# from the area; method = the procedure's fixed choice, editable under "advanced"; fact = recorded by a run.
+# Secrets are never stored here: the Mapillary token lives in the operating system's keyring.
+
+project:
+  name: Singapore descriptor validation
+  folder: D:\path\to\singapore_project                 # every step writes below this folder
+
+area:                                        # Step 0
+  boundary_file: step1_metadata/boundary/sg_boundary.geojson   # local: drawn, uploaded or picked from OSM admin areas
+  bbox_harvest: [103.60, 1.15, 104.10, 1.48] # derived: boundary bounds (+ margin); platform harvest box
+  bbox_osm: [103.55, 1.13, 104.15, 1.50]     # derived: boundary bounds + wider margin; OSM read box
+  metric_crs: EPSG:3414                      # derived: a local metric CRS (SVY21 here; UTM zone elsewhere)
+  timezone: Asia/Singapore                   # derived: from the boundary center (IANA name carries any DST rule)
+  driving_side: left                         # derived: from the country
+  country_code: SG                           # derived: ISO 3166-1 alpha-2, used by the KartaView listing
+
+platforms:
+  mapillary:
+    enabled: true
+    token: keyring:mapillary                 # local: entered once, tested, kept in the OS keyring; sent only as Authorization: OAuth
+    tiles_url: https://tiles.mapillary.com/maps/vtp/mly1_public/2/{z}/{x}/{y}
+    tile_zoom: 14                            # method
+    graph_batch: 50                          # method: ids per Graph API request
+    graph_per_s: 3.0                         # method: polite rate
+    files_per_s: 8.0
+    workers: 6
+    image_size: thumb_2048                   # local choice: thumb_1024 | thumb_2048 | original (storage decides)
+    license: "CC BY-SA 4.0, credit © Mapillary"
+  kartaview:
+    enabled: true
+    api: https://api.kartaview.org/2.0
+    bulk_access_approved: true               # local: a gate; without approval the app keeps to light use
+    per_s: 2.0                               # method: total across all running KartaView jobs
+    workers: 3
+    sweep_spacing_m: 650                     # method: <= 707 m so 500 m circles cover the area
+    sweep_radius_m: 500
+    listing_buffer_deg: 0.05                 # method: keeps sequences that start just outside
+    image_size: lth                          # local choice: lth | proc | original
+    license: "CC BY-SA 4.0, credit © Grab and KartaView Contributors"
+  # user_agent: the package default (tool name and contact) is used; the original Singapore run sent
+  # "research-client (descriptor validation)" (design/project.singapore.yaml keeps that record).
+
+osm:                                         # Steps 1, 2 and 5
+  extract: step1_metadata/osm/download/malaysia-singapore-brunei-261112.osm.pbf   # derived: smallest Geofabrik region containing the area, date-stamped file
+  extract_date: 2026-11-12                   # fact
+  history_api: https://api.ohsome.org/v1
+  history_data_to: 2026-07-27T09:00Z         # fact: read from ohsome /metadata at fetch time
+  camera_highways: [motorway, trunk, primary, secondary, tertiary, unclassified, residential,
+                    motorway_link, trunk_link, primary_link, secondary_link, tertiary_link,
+                    living_street, service, road, busway, track, pedestrian, footway, path,
+                    cycleway, bridleway, steps]                      # method: ways a camera can travel
+  not_for_vehicles: [footway, path, pedestrian, steps, cycleway, bridleway]   # method
+  street_highways: [motorway, trunk, primary, secondary, tertiary, motorway_link, trunk_link,
+                    primary_link, secondary_link, tertiary_link, unclassified, residential,
+                    living_street, road, busway]                     # method: car roads for cell coverage (no service roads)
+
+step1_harvest:
+  min_year: 2013                             # local: platform launch; earlier dates are camera resets
+  camera_reset_dates: []                     # local: default dates written by cameras after a reset
+  move_m: 1.0                                # method: a capture is moving when >= this from the previous
+  min_moving_captures: 20                    # method: shorter sequences are flagged, not dropped
+  segment_max_len_m: 100.0                   # method
+  match:
+    max_dist_m: 20.0                         # method
+    max_angle_deg: 45.0
+    turn_penalty_m: 15.0
+  vehicle:
+    median_kmh: 25.0                         # method
+    p90_kmh: 40.0
+    min_steps_p90: 10
+    car_devices: [waylens, kartacam360, dashview]   # local-ish: car-camera device names seen on the platforms
+  pass_definition: one contributor on one local date   # method
+  duplicates:
+    max_dt_s: 5.0                            # method
+    max_dist_m: 30.0
+    min_matched: 10
+    min_share: 0.3
+    clock_offsets_h: [0, 8, -8]              # derived: 0 and +/- the UTC offset of the area's time zone
+    bin_s: 10
+  clock_check:                               # method: a camera is flagged when its captures fall at night
+    night_hours: [0, 6]                      #   local time but in daytime after shifting by the UTC offset
+    min_night_share: 0.5
+    shifted_day_hours: [7, 19]
+    min_shifted_day_share: 0.9
+    min_captures: 100
+
+step2_regions:
+  mode: strata                               # local choice: whole_area (the app's default: every capture inside the
+                                             #   boundary) or strata (squares per stratum, tuning and evaluation halves,
+                                             #   the descriptor-validation design used for Singapore)
+  whole_area:                                # used when mode is whole_area
+    date_from: null                          #   local dates, inclusive; null = no limit
+    date_to: null
+    drop_duplicate_drives: true              #   keep one copy of a drive uploaded to both platforms or twice
+    platforms: null                          #   null = the enabled platforms
+  cell_m: 1000                               # method: square size on the metric CRS grid
+  min_captures_per_cell: 5
+  min_passes: 3                              # method (parameter sheet)
+  clip_buffer_frames: 20                     # method (parameter sheet)
+  local_layers:                              # local, optional: extra data some strata need
+    hdb_blocks:
+      file: step2_regions/reference_data/HDBExistingBuilding_Nov2026.geojson
+      layer: HDB_ACTIVE_BLK_P
+      min_block_m2: 200
+      match_buffer_m: 5
+      id_fields: {postal: POSTAL_COD, blk_no: BLK_NO, street_code: ST_COD}
+  rules:                                     # method: the plan's three rules for a valid square
+    min_own_share_each_platform: 0.2         #   >= 20% of street km with each platform's own passes
+    min_share_passes: 0.5                    #   >= 50% of street km with >= min_passes combined passes
+    max_top_contributor_share: 0.5           #   top contributor supplies <= 50% of the sequences
+  block_min_footprint_m2: 600                # method: untagged residential buildings larger than this are blocks
+  industrial_landuse: [industrial, port]
+  building_types:
+    landed: [house, terrace, detached, semidetached_house, bungalow]
+    blocks: [apartments, residential, dormitory]
+  tall_building: {min_levels: 20, min_height_m: 60}
+  strata:                                    # strata mode only. local: rules are cell-feature expressions; a stratum whose layer is missing is switched off
+    core:        {rule: "tall_non_res >= 5 and hdb_blocks < 20", feature: tall_non_res, picks: 3, min_gap_m: 2000}
+    expressway:  {rule: "motorway_km >= 1 and (motorway_tunnel_km >= 0.2 or motorway_bridge_km >= 0.3)", feature: motorway_tunnel_bridge}
+    landed:      {rule: "landed_houses >= 150 and residential_share >= 0.4 and hdb_blocks < 20", feature: landed_houses}
+    hdb:         {rule: "hdb_blocks >= 40", feature: hdb_blocks, needs_layer: hdb_blocks}
+    industrial:  {rule: "industrial_share >= 0.4", feature: industrial_share}
+    junctions:   {rule: "junctions >= 80", feature: junctions}
+  selection:
+    picks_per_stratum: 4                     # method
+    min_gap_m: 3000                          # method: squares of one stratum at least this far apart
+    order: [industrial, expressway, landed, core, junctions, hdb]   # scarce strata first
+  split:
+    recent_year: 2022                        # method: balance recent captures across the two halves
+    balance: [0.40, 0.60]                    # each half holds 40-60% of each platform's frames
+    max_recent_gap: 0.05
+
+storage:
+  budget_gb: 300                             # local
+  mb_per_frame: {kartaview: 0.404, mapillary: 0.38}   # fact: measured with the size test; re-measured per area
+
+step3_download:
+  image_sizes:                               # local choice: fallback order per platform, first = preferred
+    mapillary: [thumb_2048]                  #   thumb_256 | thumb_1024 | thumb_2048 | original
+    kartaview: [lth]                         #   th | lth | proc | original  (e.g. [original, proc, lth])
+  extra_sizes: {}                            # optional: e.g. {mapillary: [original]} saved as <frame>_original.jpg
+  extra_sample: 1.0                          #   share of frames that also get the extra sizes (seeded)
+  estimate_sample: 20                        # frames per platform fetched at each size for the storage estimate
+  workers: 16
+  capture_class:                             # rules tried in order (first match wins), plus review-gate overrides
+    rules:
+      - {platform: kartaview, class: vehicle}
+      - {platform: mapillary, device_contains: GoPro, class: two_wheeler}
+      - {platform: mapillary, class: on_foot}
+    overrides: {}
+  travel_yaw: {min_frames: 10, min_agree: 0.5, fallback_deg: {kartaview: 0.0}}   # fallback: fixed rig faces travel
+  working_copy: {width: 1024, jpeg_quality: 90}      # method
+  black_max_value: 8                                 # method: every pixel <= this is an all-black image
+  panoramas:
+    download: true                                   # local choice
+    sizes: {kartaview: [wrapped_lth], mapillary: [original]}   # kartaview wrapped_lth | wrapped_proc
+  crop:                                              # method (Panorama Processing Scheme)
+    views: {front: 0, right: 90, back: 180, left: 270}
+    hfov_deg: 90.0
+    pitch_down_deg: 5.0
+    size: [1024, 576]
+    view_min_valid: 0.99
+    pano_min_valid: 0.20
+    coverage_tol_deg: 8.0
+    jpeg_quality: 95
+    level_min_deg: 0.01                              # Mapillary computed_rotation closer to level = not reconstructed
+    travel_yaw_min_span_m: 3.0
+    masks: zip                                       # one stored zip per sequence (small files waste space on exFAT)
+
+step5_osm:
+  history_margin_m: 100.0                    # method
+  history_simplify_m: 10.0
+  history_pause_s: 3.0
+  match: {max_dist_m: 20.0, max_angle_deg: 45.0, penalty_m: 15.0, min_step_m: 1.0}
+  lanes_default_min_tagged: 20               # method
+  road_standard:                             # local: from the national road standard
+    source: >-
+      LTA Civil Design Criteria E/GD/09/106/A1 (Feb 2010) cl. 10.5, Table 10.17; LTA Code of Practice on Street
+      Work Proposals v2.0 (Apr 2019) Tables 2.5-2.6; LTA Standard Details of Road Elements ch. 8 RMS1-RMS3 (2026 set)
+    lane_width_m:
+      expressway: 3.7
+      curb_lane: 3.7
+      inner_lane: 3.4
+      one_lane_oneway: 5.5
+      undivided_lane: 3.7
+      slip_two_lane: 7.4
+      service_road: 6.1
+    shoulders_m: {motorway: [2.75, 0.9], motorway_link: [2.0, 0.6]}
+    curb_clearance_m: 0.4
+    line_width_mm:
+      lane_line: 100
+      lane_line_expressway: 100
+      center_line: 150
+      edge_line_divider: 200
+      edge_line_shoulder: 300
+    lane_line_pattern_m:
+      other_roads: [4, 2]                    # line, gap
+      expressway: [2, 10]
+      center_line: [2.75, 2.75]
+
+existing:                                    # local, optional: data already on disk that a step can reuse
+  annotated_photo_pages: 1000_Annotated_Examples/availability_check   # KartaView photo pages of the annotated set
+  annotated_window_manifest: 1000_Annotated_Examples/windows_pm20/manifest.csv   # frames already downloaded
+
+caches: {}                                   # optional: map a raw-response cache to another folder, e.g.
+                                             #   "mapillary/tiles": D:\earlier_run\01_metadata\mapillary\tiles
+                                             #   (keys: mapillary/tiles, mapillary/graph_devices, kartaview/raw,
+                                             #    and the Step 3 data roots images, panoramas, working, views)

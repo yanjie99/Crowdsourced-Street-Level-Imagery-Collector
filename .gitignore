@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.venv/
+venv/
+collect-env/
+
+# Local runs and project data (images, metadata, logs)
+runs/
+*.parquet
+*.pbf
+
+# Internal design notes (kept locally)
+design/
+
+# Secrets and editor/OS files
+.env
+*.token
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

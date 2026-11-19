@@ -1,0 +1,27 @@
+# Exact library versions this tool was verified with (19 Nov 2026, Python 3.12.10, Windows 11): the unit tests and
+# the Singapore reproducibility checks (tests/verification) ran with these. Use them to rebuild a working setup later:
+#
+#   python -m pip install -r requirements.txt -c constraints.txt
+#
+# requirements.txt says what the tool needs (minimum versions); this file pins what was tested, so a future release
+# of a library (pandas 3 changed how text columns behave twice in Nov 2026) cannot change the results unnoticed.
+# After moving to newer versions on purpose, run python -m pytest, then update the numbers here.
+#
+# Also seen working (the Run page's jobs in the csi_downloader environment, Python 3.12.16): typer 0.29.2,
+# pandas 3.1.1, pyarrow 26.0.1, numpy 2.5.5, shapely 2.2.0, opencv-python-headless 5.1.0.95, pillow 13.0.0,
+# tzdata 2026.6 (the other versions as below).
+
+PyYAML==6.0.3
+typer==0.27.2
+pandas==3.0.5
+pyarrow==25.0.1
+numpy==2.5.2
+shapely==2.1.2
+pyproj==3.8.0
+osmium==4.3.2
+requests==2.34.2
+opencv-python-headless==5.0.0.93
+mapbox-vector-tile==2.2.0
+pillow==12.3.0
+tzdata==2026.3
+pytest==9.1.1

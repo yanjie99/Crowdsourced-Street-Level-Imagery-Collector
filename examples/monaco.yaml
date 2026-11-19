@@ -1,0 +1,37 @@
+# Example: a project made by `collect init monaco --place Monaco`, plus a date range.
+# Everything not written here comes from collect/defaults.yaml.
+project:
+  name: Monaco (Phase 2 test)
+  folder: D:\path\to\monaco
+area:
+  boundary_file: 00_setup/boundary.geojson
+  boundary_source:
+    nominatim: Monaco
+    osm: relation/1124039
+    fetched_utc: '2026-11-18T12:58:22+00:00'
+  bbox_harvest:
+  - 7.404
+  - 43.5115
+  - 7.538
+  - 43.7569
+  bbox_osm:
+  - 7.389
+  - 43.4965
+  - 7.553
+  - 43.7719
+  metric_crs: EPSG:32632
+  timezone: Europe/Monaco
+  driving_side: right
+  country_code: MC
+platforms:
+  mapillary:
+    enabled: true
+  kartaview:
+    enabled: true
+storage:
+  budget_gb: 5
+step2_regions:
+  whole_area:
+    date_from: '2019-04-01'
+    date_to: '2019-10-31'
+  mode: whole_area
